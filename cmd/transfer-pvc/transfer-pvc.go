@@ -34,6 +34,8 @@ import (
 	"k8s.io/client-go/rest"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 const (

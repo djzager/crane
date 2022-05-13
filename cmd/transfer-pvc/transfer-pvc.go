@@ -70,6 +70,8 @@ type pvcConfig struct {
 	storageClassName string
 	// storageRequests defines requested capacity of destination PVC
 	storageRequests quantityVar
+	// storageAccessModes defines which accessModes should be applied to destination PVC
+	storageAccessModes []string
 }
 
 func NewTransferOptions(streams genericclioptions.IOStreams) *cobra.Command {
@@ -114,6 +116,7 @@ func addFlagsForTransferPVCOptions(t *TransferPVCOptions, cmd *cobra.Command) {
 	cmd.Flags().StringVar(&t.Endpoint, "endpoint", endpointNginx, "The type of networking endpoint to use to accept traffic in destination cluster. The options available are `nginx-ingress` and `route`")
 	cmd.Flags().StringVar(&t.storageClassName, "dest-storage-class", "", "Storage class for the destination PVC")
 	cmd.Flags().Var(&t.storageRequests, "dest-storage-requests", "Requested storage capacity for the destination PVC")
+	cmd.Flags().StringArrayVar(&t.storageAccessModes, "dest-access-mode", nil, "The name of destination context in current kubeconfig")
 	cmd.Flags().BoolVar(&t.Verify, "verify", false, "Enable checksum verification")
 }
 
@@ -279,6 +282,8 @@ func (t *TransferPVCOptions) run() error {
 		log.Fatal(err, "failed to find node name")
 	}
 
+	falseVar := false
+	zeroVar := int64(0)
 	// Rsync Example
 	rsyncTransferOptions := []rsync.TransferOption{
 		rsync.StandardProgress(true),
@@ -289,6 +294,44 @@ func (t *TransferPVCOptions) run() error {
 		&rsync.SourcePodSpecMutation{
 			Spec: &corev1.PodSpec{
 				NodeName: nodeName,
+				SecurityContext: &corev1.PodSecurityContext{
+					SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "virt_launcher.process",
+					},
+				},
+			},
+		},
+		&rsync.DestinationPodSpecMutation{
+			Spec: &corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "virt_launcher.process",
+					},
+				},
+			},
+		},
+		&rsync.SourceContainerMutation{
+			C: &corev1.Container{
+				SecurityContext: &corev1.SecurityContext{
+					Capabilities: &corev1.Capabilities{
+						Add:  []corev1.Capability{"NET_BIND_SERVICE", "SYS_NICE"},
+						Drop: []corev1.Capability{"NET_RAW"},
+					},
+					Privileged: &falseVar,
+					RunAsUser:  &zeroVar,
+				},
+			},
+		},
+		&rsync.DestinationContainerMutation{
+			C: &corev1.Container{
+				SecurityContext: &corev1.SecurityContext{
+					Capabilities: &corev1.Capabilities{
+						Add:  []corev1.Capability{"NET_BIND_SERVICE", "SYS_NICE"},
+						Drop: []corev1.Capability{"NET_RAW"},
+					},
+					Privileged: &falseVar,
+					RunAsUser:  &zeroVar,
+				},
 			},
 		},
 		verify(t.Verify),
@@ -574,7 +617,15 @@ func (t *TransferPVCOptions) getDestinationPVC(sourcePVC *corev1.PersistentVolum
 	if t.pvcConfig.storageClassName != "" {
 		pvc.Spec.StorageClassName = &t.pvcConfig.storageClassName
 	}
+	if t.pvcConfig.storageAccessModes != nil {
+		accessModes := make([]corev1.PersistentVolumeAccessMode, len(t.pvcConfig.storageAccessModes))
+		for i, accessMode := range t.pvcConfig.storageAccessModes {
+			accessModes[i] = corev1.PersistentVolumeAccessMode(accessMode)
+		}
+		pvc.Spec.AccessModes = accessModes
+	}
 	// clear fields
+	pvc.Spec.DataSource = nil
 	pvc.Spec.VolumeMode = nil
 	pvc.Spec.VolumeName = ""
 	return pvc

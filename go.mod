@@ -13,6 +13,7 @@ require (
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.8.1
 	github.com/vmware-tanzu/velero v1.6.3
+	golang.org/x/mod v0.5.1
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
@@ -20,5 +21,6 @@ require (
 	k8s.io/client-go v0.22.2
 	sigs.k8s.io/controller-runtime v0.10.1
 	sigs.k8s.io/yaml v1.3.0
-	golang.org/x/mod v0.5.1
 )
+
+replace github.com/konveyor/crane-lib => github.com/djzager/crane-lib v0.0.3-0.20220516175159-66f750343902
